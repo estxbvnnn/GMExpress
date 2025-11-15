@@ -33,8 +33,9 @@ const validateRut = (rut) => {
 	return dvCalc === dv;
 };
 
-// NUEVO: util para validar solo letras + espacios
-const onlyLetters = (value) => /^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(value || "");
+// CAMBIO: solo letras sin espacios (A-Z, áéíóúñ)
+const onlyLettersNoSpace = (value) =>
+	/^[A-Za-zÁÉÍÓÚÑáéíóúñ]+$/.test(value || "");
 
 export const AuthProvider = ({ children }) => {
 	const [user, setUser] = useState(null);
@@ -85,13 +86,14 @@ export const AuthProvider = ({ children }) => {
 		password,
 		tipoUsuario,
 	}) => {
-		// VALIDACIONES TEXTO (sin números)
+		// VALIDACIONES TEXTO (sin espacios, solo letras)
 		if (!nombre || nombre.trim().length < 4 || nombre.trim().length > 20) {
 			throw new Error("El nombre debe tener entre 4 y 20 caracteres.");
 		}
-		if (!onlyLetters(nombre)) {
-			throw new Error("El nombre solo puede contener letras y espacios.");
+		if (!onlyLettersNoSpace(nombre.trim())) {
+			throw new Error("El nombre solo puede contener letras, sin espacios.");
 		}
+
 		if (
 			!apellidoPaterno ||
 			apellidoPaterno.trim().length < 4 ||
@@ -101,11 +103,12 @@ export const AuthProvider = ({ children }) => {
 				"El apellido paterno debe tener entre 4 y 20 caracteres."
 			);
 		}
-		if (!onlyLetters(apellidoPaterno)) {
+		if (!onlyLettersNoSpace(apellidoPaterno.trim())) {
 			throw new Error(
-				"El apellido paterno solo puede contener letras y espacios."
+				"El apellido paterno solo puede contener letras, sin espacios."
 			);
 		}
+
 		if (
 			!apellidoMaterno ||
 			apellidoMaterno.trim().length < 4 ||
@@ -115,9 +118,9 @@ export const AuthProvider = ({ children }) => {
 				"El segundo apellido debe tener entre 4 y 20 caracteres."
 			);
 		}
-		if (!onlyLetters(apellidoMaterno)) {
+		if (!onlyLettersNoSpace(apellidoMaterno.trim())) {
 			throw new Error(
-				"El segundo apellido solo puede contener letras y espacios."
+				"El segundo apellido solo puede contener letras, sin espacios."
 			);
 		}
 
