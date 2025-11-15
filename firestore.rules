@@ -1,0 +1,40 @@
+rules_version = '2';
+
+function isSignedIn() {
+  return request.auth != null;
+}
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Catálogo: lectura pública, escritura usuarios autenticados
+    match /productos/{productId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /categorias/{categoriaId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Usuarios: cualquier usuario autenticado puede leer la lista de usuarios
+    // (para el mantenedor del Admin Panel) y escribir (editar) documentos.
+    match /usuarios/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Órdenes: cualquier usuario autenticado puede leer y escribir
+    // (el Admin Panel lee todas, los clientes crean las suyas).
+    match /orders/{orderId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Bloquear colecciones no declaradas arriba
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
