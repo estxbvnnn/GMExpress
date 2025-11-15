@@ -30,16 +30,20 @@ const AdminPanel = () => {
 		role: "cliente",
 		email: "",
 	});
-
-	// NUEVO: categoría seleccionada en la sección Catálogo
 	const [selectedCatalogCategory, setSelectedCatalogCategory] = useState("TODAS");
+
+	// filtros reportes
+	const [reportFrom, setReportFrom] = useState("");
+	const [reportTo, setReportTo] = useState("");
+	const [reportChannel, setReportChannel] = useState("TODOS");
+	const [reportCategory, setReportCategory] = useState("TODAS");
+	const [reportRequested, setReportRequested] = useState(false);
 
 	const loadData = async () => {
 		setLoading(true);
 		try {
 			console.log("AdminPanel: cargando datos para usuario:", user?.uid, user?.role);
 
-			// pedidos
 			const ordersSnap = await getDocs(
 				query(collection(db, "orders"), orderBy("createdAt", "desc"))
 			);
@@ -48,14 +52,12 @@ const AdminPanel = () => {
 				...d.data(),
 			}));
 
-			// productos
 			const prodSnap = await getDocs(collection(db, "productos"));
 			const prodData = prodSnap.docs.map((d) => ({
 				id: d.id,
 				...d.data(),
 			}));
 
-			// usuarios
 			const usersSnap = await getDocs(collection(db, "usuarios"));
 			const usersData = usersSnap.docs.map((d) => ({
 				id: d.id,
@@ -97,16 +99,11 @@ const AdminPanel = () => {
 		if (!ts || !ts.toDate) return false;
 		const d = ts.toDate();
 		const now = new Date();
-		return (
-			d.getMonth() === now.getMonth() &&
-			d.getFullYear() === now.getFullYear()
-		);
+		return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 	};
 
 	// KPIs
-	const nuevasSolicitudes = orders.filter(
-		(o) => o.status === "pendiente"
-	).length;
+	const nuevasSolicitudes = orders.filter((o) => o.status === "pendiente").length;
 
 	const ventasMes = orders
 		.filter((o) => o.status === "entregado" && isSameMonth(o.createdAt))
@@ -114,8 +111,7 @@ const AdminPanel = () => {
 
 	const productosActivos = products.filter((p) => p.active !== false).length;
 
-	const formatMoney = (n) =>
-		`$${(n || 0).toLocaleString("es-CL")}`;
+	const formatMoney = (n) => `$${(n || 0).toLocaleString("es-CL")}`;
 
 	const formatDateTime = (ts) => {
 		if (!ts || !ts.toDate) return "-";
@@ -383,42 +379,408 @@ const AdminPanel = () => {
 		);
 	};
 
+	// --- NUEVO: helpers de reportes ---
+	const toDateOnly = (ts) => {
+		if (!ts || !ts.toDate) return null;
+		const d = ts.toDate();
+		return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+	};
+
+	const formatDateOnly = (d) =>
+		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+			d.getDate()
+		).padStart(2, "0")}`;
+
+	const getUserById = (uid) => usersList.find((u) => u.id === uid);
+
+	const applyReportFilters = () => {
+		let filtered = orders.filter((o) => o.status === "entregado"); // ventas efectivas
+
+		// rango de fechas
+		if (reportFrom) {
+			const from = new Date(reportFrom + "T00:00:00");
+			filtered = filtered.filter((o) => {
+				const d = toDateOnly(o.createdAt);
+				return d && d >= from;
+			});
+		}
+		if (reportTo) {
+			const to = new Date(reportTo + "T23:59:59");
+			filtered = filtered.filter((o) => {
+				const d = toDateOnly(o.createdAt);
+				return d && d <= to;
+			});
+		}
+
+		// canal (según tipoUsuario en usuarios)
+		if (reportChannel !== "TODOS") {
+			filtered = filtered.filter((o) => {
+				const u = getUserById(o.userId);
+				if (!u) return false;
+				if (reportChannel === "CLIENTE") return u.tipoUsuario === "Cliente";
+				if (reportChannel === "EMPRESA") return u.tipoUsuario === "Empresa";
+				return true;
+			});
+		}
+
+		// categoría: alguna línea de la orden con categoriaId/categoriaNombre
+		if (reportCategory !== "TODAS") {
+			filtered = filtered.filter((o) =>
+				(o.items || []).some((it) => it.categoriaId === reportCategory)
+			);
+		}
+
+		return filtered;
+	};
+
+	const buildDailySummary = (ordersFiltered) => {
+		const map = new Map();
+		for (const o of ordersFiltered) {
+			const d = toDateOnly(o.createdAt);
+			if (!d) continue;
+			const key = formatDateOnly(d);
+			const prev = map.get(key) || { date: key, total: 0, count: 0 };
+			prev.total += o.total || 0;
+			prev.count += 1;
+			map.set(key, prev);
+		}
+		return Array.from(map.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
+	};
+
+	const buildTopProducts = (ordersFiltered) => {
+		const map = new Map();
+		for (const o of ordersFiltered) {
+			for (const it of o.items || []) {
+				const key = it.productId || it.name;
+				const prev = map.get(key) || {
+					productId: it.productId || null,
+					name: it.name || "Sin nombre",
+					quantity: 0,
+					revenue: 0,
+				};
+				prev.quantity += it.quantity || 0;
+				prev.revenue += (it.price || 0) * (it.quantity || 0);
+				map.set(key, prev);
+			}
+		}
+		return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+	};
+
+	// NUEVO: export Excel “profesional” con 2 tablas en un .xls
+	const exportReportExcel = (opts) => {
+		const { daily, topProducts, totalVentas, meta } = opts;
+		if (!daily.length && !topProducts.length) return;
+
+		// Encabezado descriptivo
+		const infoRows = [
+			["GM Express - Reporte de ventas"],
+			[
+				"Período",
+				`${meta.desde || "Sin límite"} al ${meta.hasta || "Sin límite"}`,
+			],
+			["Canal", meta.canal],
+			["Categoría", meta.categoria],
+			["Total ventas (CLP)", totalVentas],
+			[], // línea en blanco
+		];
+
+		const tableInfo = (rows) =>
+			rows.map(
+				(r) =>
+					`<tr>${r
+						.map((cell) => `<td style="border:1px solid #ccc;padding:4px;">${cell}</td>`)
+						.join("")}</tr>`
+			);
+
+		// Hoja 1: resumen por día
+		const dailyHeader = ["Fecha", "Cantidad de pedidos", "Total vendido (CLP)"];
+		const dailyRows = daily.map((d) => [
+			d.date,
+			d.count,
+			d.total.toLocaleString("es-CL"),
+		]);
+
+		// Hoja 2: top productos
+		const topHeader = ["Producto", "Cantidad vendida", "Ingresos (CLP)"];
+		const topRows = topProducts.map((p) => [
+			p.name,
+			p.quantity,
+			p.revenue.toLocaleString("es-CL"),
+		]);
+
+		const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="UTF-8" />
+          <!-- Indicamos a Excel que hay varias "hojas" mediante secciones -->
+        </head>
+        <body>
+          <table>
+            ${tableInfo(infoRows).join("")}
+          </table>
+          <br/>
+          <table border="1">
+            <tr>
+              ${dailyHeader
+								.map(
+									(h) =>
+										`<th style="background:#0b6b43;color:#fff;padding:4px;">${h}</th>`
+								)
+								.join("")}
+            </tr>
+            ${tableInfo(dailyRows).join("")}
+          </table>
+          <br/>
+          <table border="1">
+            <tr>
+              ${topHeader
+								.map(
+									(h) =>
+										`<th style="background:#0b6b43;color:#fff;padding:4px;">${h}</th>`
+								)
+								.join("")}
+            </tr>
+            ${tableInfo(topRows).join("")}
+          </table>
+        </body>
+      </html>
+    `.trim();
+
+		const blob = new Blob([html], {
+			type: "application/vnd.ms-excel;charset=utf-8;",
+		});
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = `reporte_ventas_${meta.fileSuffix || "gmexpress"}.xls`;
+		a.click();
+		URL.revokeObjectURL(url);
+	};
+
 	const renderReports = () => {
-		const delivered = orders.filter((o) => o.status === "entregado");
-		const totalVentas = delivered.reduce(
+		const categorias = Array.from(
+			new Map(
+				products.map((p) => [
+					p.categoriaId || "SIN_CAT",
+					{
+						id: p.categoriaId || "SIN_CAT",
+						name: p.categoriaNombre || "Sin categoría",
+					},
+				])
+			).values()
+		).sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+		const filtered = applyReportFilters();
+		const daily = buildDailySummary(filtered);
+		const topProducts = buildTopProducts(filtered);
+		const totalVentas = filtered.reduce(
 			(sum, o) => sum + (o.total || 0),
 			0
 		);
+
+		const meta = {
+			desde: reportFrom || "",
+			hasta: reportTo || "",
+			canal:
+				reportChannel === "TODOS"
+					? "Todos"
+					: reportChannel === "CLIENTE"
+					? "Clientes finales"
+					: "Empresas",
+			categoria:
+				reportCategory === "TODAS"
+					? "Todas"
+					: categorias.find((c) => c.id === reportCategory)?.name || reportCategory,
+			fileSuffix: `${reportFrom || "inicio"}_${reportTo || "hoy"}`.replace(
+				/[^\d_]/g,
+				""
+			),
+		};
 
 		return (
 			<>
 				<h1>Reportes de ventas</h1>
 				<p>
-					<b>Total ventas entregadas:</b> {formatMoney(totalVentas)}
+					Filtra por rango de fechas, canal y categoría para analizar el rendimiento
+					de las ventas (solo pedidos con estado <b>entregado</b>).
 				</p>
-				{delivered.length === 0 ? (
-					<p>No hay ventas entregadas registradas.</p>
-				) : (
-					<table className="admin-table admin-table-wide">
-						<thead>
-							<tr>
-								<th>ID</th>
-								<th>Cliente</th>
-								<th>Fecha</th>
-								<th>Total</th>
-							</tr>
-						</thead>
-						<tbody>
-							{delivered.map((o) => (
-								<tr key={o.id}>
-									<td>{o.id}</td>
-									<td>{o.clientName || o.userEmail || "-"}</td>
-									<td>{formatDateTime(o.createdAt)}</td>
-									<td>{formatMoney(o.total)}</td>
+
+				{/* Filtros ordenados */}
+				<div
+					style={{
+						display: "flex",
+						flexDirection: "column",
+						gap: 8,
+						marginBottom: 16,
+					}}
+				>
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+							gap: 10,
+						}}
+					>
+						<div>
+							<label style={{ fontSize: "0.8rem", color: "#555" }}>
+								Desde (fecha)
+							</label>
+							<input
+								type="date"
+								value={reportFrom}
+								onChange={(e) => setReportFrom(e.target.value)}
+								style={{
+									width: "100%",
+									borderRadius: 8,
+									border: "1px solid #ddd",
+									padding: "6px 8px",
+									fontSize: "0.85rem",
+								}}
+							/>
+						</div>
+						<div>
+							<label style={{ fontSize: "0.8rem", color: "#555" }}>
+								Hasta (fecha)
+							</label>
+							<input
+								type="date"
+								value={reportTo}
+								onChange={(e) => setReportTo(e.target.value)}
+								style={{
+									width: "100%",
+									borderRadius: 8,
+									border: "1px solid #ddd",
+									padding: "6px 8px",
+									fontSize: "0.85rem",
+								}}
+							/>
+						</div>
+					</div>
+
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+							gap: 10,
+						}}
+					>
+						<div>
+							<label style={{ fontSize: "0.8rem", color: "#555" }}>
+								Canal
+							</label>
+							<select
+								className="admin-select"
+								value={reportChannel}
+								onChange={(e) => setReportChannel(e.target.value)}
+								style={{ width: "100%" }}
+							>
+								<option value="TODOS">Todos</option>
+								<option value="CLIENTE">Cliente</option>
+								<option value="EMPRESA">Empresa</option>
+							</select>
+						</div>
+						<div>
+							<label style={{ fontSize: "0.8rem", color: "#555" }}>
+								Categoría
+							</label>
+							<select
+								className="admin-select"
+								value={reportCategory}
+								onChange={(e) => setReportCategory(e.target.value)}
+								style={{ width: "100%" }}
+							>
+								<option value="TODAS">Todas</option>
+								{categorias.map((c) => (
+									<option key={c.id} value={c.id}>
+										{c.name}
+									</option>
+								))}
+							</select>
+						</div>
+					</div>
+				</div>
+
+				<div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+					<button
+						className="btn-primary"
+						type="button"
+						onClick={() => setReportRequested(true)}
+					>
+						Generar reporte
+					</button>
+					{filtered.length > 0 && (
+						<button
+							className="btn-secondary"
+							type="button"
+							onClick={() =>
+								exportReportExcel({
+									daily,
+									topProducts,
+									totalVentas,
+									meta,
+								})
+							}
+						>
+							Exportar reporte (Excel)
+						</button>
+					)}
+				</div>
+
+				{reportRequested && filtered.length === 0 && (
+					<p>
+						<b>Sin ventas en este periodo</b>.
+					</p>
+				)}
+
+				{reportRequested && filtered.length > 0 && (
+					<>
+						<p style={{ fontSize: "0.9rem" }}>
+							<b>Ventas entregadas en el período:</b>{" "}
+							{filtered.length} pedidos · Total: {formatMoney(totalVentas)}
+						</p>
+
+						<h3>Totales por día</h3>
+						<table className="admin-table admin-table-wide">
+							<thead>
+								<tr>
+									<th>Fecha</th>
+									<th>Cantidad de pedidos</th>
+									<th>Total vendido</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{daily.map((d) => (
+									<tr key={d.date}>
+										<td>{d.date}</td>
+										<td>{d.count}</td>
+										<td>{formatMoney(d.total)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+
+						<h3 style={{ marginTop: 18 }}>Productos más vendidos</h3>
+						<table className="admin-table admin-table-wide">
+							<thead>
+								<tr>
+									<th>Producto</th>
+									<th>Cantidad vendida</th>
+									<th>Ingresos</th>
+								</tr>
+							</thead>
+							<tbody>
+								{topProducts.map((p) => (
+									<tr key={p.productId || p.name}>
+										<td>{p.name}</td>
+										<td>{p.quantity}</td>
+										<td>{formatMoney(p.revenue)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</>
 				)}
 			</>
 		);

@@ -11,37 +11,36 @@ import { auth, db, googleProvider } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 const AuthContext = createContext(null);
-
 export const useAuth = () => useContext(AuthContext);
 
-// util simple para validar RUT chileno
-const cleanRut = (rut) => rut.replace(/\./g, "").replace(/-/g, "").toUpperCase();
+// Utils RUT
+const cleanRut = (rut) =>
+	rut ? rut.replace(/\./g, "").replace(/-/g, "").toUpperCase() : "";
 
 const validateRut = (rut) => {
 	const value = cleanRut(rut);
-	if (value.length < 8 || value.length > 9) return false;
+	if (!value || value.length < 8 || value.length > 9) return false;
 	const body = value.slice(0, -1);
-	const dv = value.slice(-1);
-
+	const dv = value.slice(-1).toUpperCase();
 	let sum = 0;
-	let multiplier = 2;
+	let mult = 2;
 	for (let i = body.length - 1; i >= 0; i--) {
-		sum += parseInt(body[i], 10) * multiplier;
-		multiplier = multiplier === 7 ? 2 : multiplier + 1;
+		sum += parseInt(body[i], 10) * mult;
+		mult = mult === 7 ? 2 : mult + 1;
 	}
 	const expected = 11 - (sum % 11);
-	let dvCalc = "";
-	if (expected === 11) dvCalc = "0";
-	else if (expected === 10) dvCalc = "K";
-	else dvCalc = String(expected);
-
+	const dvCalc = expected === 11 ? "0" : expected === 10 ? "K" : String(expected);
 	return dvCalc === dv;
 };
+
+// NUEVO: util para validar solo letras + espacios
+const onlyLetters = (value) => /^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(value || "");
 
 export const AuthProvider = ({ children }) => {
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(true);
 
+	// Mantener sesión y perfil siempre sincronizados
 	useEffect(() => {
 		const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
 			try {
@@ -53,7 +52,8 @@ export const AuthProvider = ({ children }) => {
 				const userRef = doc(db, "usuarios", firebaseUser.uid);
 				const snap = await getDoc(userRef);
 				const profileData = snap.exists() ? snap.data() : {};
-				setUser({
+
+				const composedUser = {
 					uid: firebaseUser.uid,
 					email: firebaseUser.email,
 					displayName: firebaseUser.displayName,
@@ -63,10 +63,11 @@ export const AuthProvider = ({ children }) => {
 					apellidoPaterno: profileData.apellidoPaterno,
 					apellidoMaterno: profileData.apellidoMaterno,
 					rut: profileData.rut,
-				});
+				};
+				console.log("AuthContext onAuthStateChanged ->", composedUser);
+				setUser(composedUser);
 			} catch (err) {
 				console.error("Error cargando perfil de usuario:", err);
-				// Si hay error, al menos no dejamos la app colgada
 				setUser(null);
 			} finally {
 				setLoading(false);
@@ -84,8 +85,12 @@ export const AuthProvider = ({ children }) => {
 		password,
 		tipoUsuario,
 	}) => {
+		// VALIDACIONES TEXTO (sin números)
 		if (!nombre || nombre.trim().length < 4 || nombre.trim().length > 20) {
 			throw new Error("El nombre debe tener entre 4 y 20 caracteres.");
+		}
+		if (!onlyLetters(nombre)) {
+			throw new Error("El nombre solo puede contener letras y espacios.");
 		}
 		if (
 			!apellidoPaterno ||
@@ -94,6 +99,11 @@ export const AuthProvider = ({ children }) => {
 		) {
 			throw new Error(
 				"El apellido paterno debe tener entre 4 y 20 caracteres."
+			);
+		}
+		if (!onlyLetters(apellidoPaterno)) {
+			throw new Error(
+				"El apellido paterno solo puede contener letras y espacios."
 			);
 		}
 		if (
@@ -105,6 +115,13 @@ export const AuthProvider = ({ children }) => {
 				"El segundo apellido debe tener entre 4 y 20 caracteres."
 			);
 		}
+		if (!onlyLetters(apellidoMaterno)) {
+			throw new Error(
+				"El segundo apellido solo puede contener letras y espacios."
+			);
+		}
+
+		// VALIDACIONES RUT/EMAIL/CLAVE/TIPO
 		if (!rut || !validateRut(rut)) {
 			throw new Error("RUT inválido, verifique el formato y dígito verificador.");
 		}
@@ -123,19 +140,15 @@ export const AuthProvider = ({ children }) => {
 			throw new Error("La contraseña debe tener al menos 6 caracteres.");
 		}
 		if (tipoUsuario !== "Cliente" && tipoUsuario !== "Empresa") {
-			throw new Error("Debe seleccionar tipo de usuario: Cliente o Empresa.");
+			throw new Error("Tipo de usuario inválido.");
 		}
 
 		const displayName = `${nombre.trim()} ${apellidoPaterno.trim()}`;
-		// crear usuario en Authentication (aquí queda autenticado)
 		const cred = await createUserWithEmailAndPassword(auth, emailTrim, password);
 		await updateProfile(cred.user, { displayName });
 
-		// un registro normal nunca crea superadmin, solo cliente o empresa
-		const role =
-			tipoUsuario === "Empresa" ? "empresa" : "cliente";
+		const role = tipoUsuario === "Empresa" ? "empresa" : "cliente";
 
-		// guardar perfil en colección "usuarios"
 		const userRef = doc(db, "usuarios", cred.user.uid);
 		await setDoc(userRef, {
 			nombre: nombre.trim(),
@@ -151,17 +164,15 @@ export const AuthProvider = ({ children }) => {
 
 	const login = async ({ email, password }) => {
 		if (!email || !password) {
-			throw new Error("Debe ingresar correo y contraseña.");
+			throw new Error("Debes ingresar correo y contraseña.");
 		}
-		// iniciar sesión
 		const cred = await signInWithEmailAndPassword(auth, email, password);
 
-		// refrescar perfil desde "usuarios" inmediatamente
 		const userRef = doc(db, "usuarios", cred.user.uid);
 		const snap = await getDoc(userRef);
 		const profileData = snap.exists() ? snap.data() : {};
 
-		setUser({
+		const composedUser = {
 			uid: cred.user.uid,
 			email: cred.user.email,
 			displayName: cred.user.displayName,
@@ -171,17 +182,18 @@ export const AuthProvider = ({ children }) => {
 			apellidoPaterno: profileData.apellidoPaterno,
 			apellidoMaterno: profileData.apellidoMaterno,
 			rut: profileData.rut,
-		});
+		};
+		console.log("AuthContext login ->", composedUser);
+		setUser(composedUser);
 	};
 
 	const loginWithGoogle = async () => {
 		await signInWithPopup(auth, googleProvider);
-		// Si quisieras forzar capturar más datos (rut, apellidos) para Google,
-		// podrías redirigir luego a una pantalla de completar perfil.
 	};
 
 	const logout = async () => {
 		await signOut(auth);
+		setUser(null);
 	};
 
 	const value = {

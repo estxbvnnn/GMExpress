@@ -7,7 +7,7 @@ function isSignedIn() {
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Catálogo: lectura pública, escritura usuarios autenticados
+    // Catálogo: lectura pública, escritura autenticados
     match /productos/{productId} {
       allow read: if true;
       allow write: if isSignedIn();
@@ -18,21 +18,21 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Usuarios: cualquier usuario autenticado puede leer la lista de usuarios
-    // (para el mantenedor del Admin Panel) y escribir (editar) documentos.
+    // Usuarios: lectura y escritura para cualquier autenticado
+    // (controlas quién puede hacer qué desde el frontend por rol)
     match /usuarios/{userId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
-    // Órdenes: cualquier usuario autenticado puede leer y escribir
-    // (el Admin Panel lee todas, los clientes crean las suyas).
+    // Órdenes: cualquier autenticado puede leer y escribir
+    // (el superadmin las ve todas; el cliente solo accede vía frontend filtrado por userId)
     match /orders/{orderId} {
       allow read, write: if isSignedIn();
     }
 
-    // Bloquear colecciones no declaradas arriba
+    // Bloquear colecciones no declaradas
     match /{document=**} {
       allow read, write: if false;
     }

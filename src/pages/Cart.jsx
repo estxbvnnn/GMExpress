@@ -48,7 +48,7 @@ const Cart = () => {
 		}
 		try {
 			setSending(true);
-			await addDoc(collection(db, "orders"), {
+			const payload = {
 				userId: user.uid,
 				clientName: user.nombre
 					? `${user.nombre} ${user.apellidoPaterno || ""}`.trim()
@@ -63,7 +63,11 @@ const Cart = () => {
 				total,
 				status: "pendiente",
 				createdAt: serverTimestamp(),
-			});
+			};
+			console.log("Cart -> creando order con payload", payload);
+			await addDoc(collection(db, "orders"), payload);
+
+			// ...existing limpiar carrito + Swal + navigate...
 			localStorage.removeItem("cart");
 			setItems([]);
 			await Swal.fire(
@@ -73,6 +77,7 @@ const Cart = () => {
 			);
 			navigate("/mis-pedidos");
 		} catch (err) {
+			console.error("Error creando order:", err);
 			Swal.fire(
 				"Error",
 				"Error al generar la solicitud. Intenta nuevamente.",

@@ -378,6 +378,26 @@ const Catalog = () => {
 		<div className="page-container">
 			<h1>Catálogo de Productos y Servicios</h1>
 
+			{/* NUEVO: acceso rápido al historial */}
+			{user && (
+				<div
+					style={{
+						marginBottom: 12,
+						display: "flex",
+						gap: 8,
+						flexWrap: "wrap",
+					}}
+				>
+					<button
+						type="button"
+						className="btn-secondary"
+						onClick={() => navigate("/mis-pedidos")}
+					>
+						Ver historial de compras
+					</button>
+				</div>
+			)}
+
 			{/* Breadcrumb simple */}
 			<div className="catalog-breadcrumb">
 				<span
@@ -464,8 +484,19 @@ const Catalog = () => {
 									</div>
 									<div className="catalog-card-footer">
 										{/* NUEVO: selector de cantidad */}
-										<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-											<label style={{ fontSize: "0.8rem", color: "#666" }}>
+										<div
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: 8,
+											}}
+										>
+											<label
+												style={{
+													fontSize: "0.8rem",
+													color: "#666",
+												}}
+											>
 												Cant.
 											</label>
 											<input

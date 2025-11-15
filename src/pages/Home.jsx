@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Home = () => {
+	const { user } = useAuth();
 	return (
 		<div className="home-page">
 			{/* HERO PRINCIPAL */}
@@ -22,9 +24,17 @@ const Home = () => {
 							<Link to="/catalogo" className="btn-primary">
 								Ver catálogo de servicios
 							</Link>
-							<Link to="/login" className="btn-secondary">
-								Gestionar pedidos
-							</Link>
+							{user ? (
+								<>
+									<Link to="/mis-pedidos" className="btn-secondary">
+										Mis pedidos / historial
+									</Link>
+								</>
+							) : (
+								<Link to="/login" className="btn-secondary">
+									Gestionar pedidos
+								</Link>
+							)}
 						</div>
 					</div>
 					<div className="home-hero-info">
