@@ -1,24 +1,87 @@
 import { useEffect, useState } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+
+const getCartKey = (uid) => `cart_${uid}`;
+
+const readCart = (uid) => {
+	try {
+		return JSON.parse(localStorage.getItem(getCartKey(uid)) || "[]");
+	} catch {
+		return [];
+	}
+};
+
+const writeCart = (uid, data) => {
+	localStorage.setItem(getCartKey(uid), JSON.stringify(data));
+	localStorage.removeItem("cart");
+};
 
 const Cart = () => {
 	const [items, setItems] = useState([]);
 	const [sending, setSending] = useState(false);
 	const { user } = useAuth();
 	const navigate = useNavigate();
+	const normalizeRole = (value) => (value || "").toLowerCase();
+	const userRole =
+		normalizeRole(user?.role) || normalizeRole(user?.tipoUsuario) || "";
+	const isCompanyUser = userRole === "empresa";
+
+	const hydrateItemsWithOwner = async (list) => {
+		const pending = list.filter(
+			(item) => !item.ownerId || !item.categoriaId || !item.categoriaNombre
+		);
+		if (pending.length === 0) return list;
+
+		const productIds = Array.from(new Set(pending.map((i) => i.id)));
+		const metadata = {};
+		await Promise.all(
+			productIds.map(async (productId) => {
+				try {
+					const snap = await getDoc(doc(db, "productos", productId));
+					if (snap.exists()) metadata[productId] = snap.data();
+				} catch (err) {
+					console.error("Cart -> error hidratando producto", productId, err);
+				}
+			})
+		);
+
+		return list.map((item) => {
+			const data = metadata[item.id];
+			if (!data) return item;
+			return {
+				...item,
+				ownerId: item.ownerId || data.ownerId || null,
+				ownerEmail: item.ownerEmail || data.ownerEmail || null,
+				categoriaId: item.categoriaId || data.categoriaId || null,
+				categoriaNombre: item.categoriaNombre || data.categoriaNombre || null,
+			};
+		});
+	};
 
 	useEffect(() => {
-		const stored = JSON.parse(localStorage.getItem("cart") || "[]");
-		setItems(stored);
-	}, []);
+		const loadCart = async () => {
+			if (!user) {
+				setItems([]);
+				return;
+			}
+			const stored = readCart(user.uid);
+			const hydrated = await hydrateItemsWithOwner(stored);
+			setItems(hydrated);
+			writeCart(user.uid, hydrated);
+			localStorage.removeItem("cart");
+		};
+		loadCart();
+	}, [user]);
 
 	const updateCart = (updated) => {
 		setItems(updated);
-		localStorage.setItem("cart", JSON.stringify(updated));
+		if (user) {
+			writeCart(user.uid, updated);
+		}
 	};
 
 	const handleQuantity = (id, delta) => {
@@ -42,33 +105,49 @@ const Cart = () => {
 
 	const handleCreateOrder = async () => {
 		if (!user) return;
+		if (isCompanyUser) {
+			Swal.fire(
+				"Solo clientes",
+				"Las cuentas de empresa no utilizan carrito. Revisa tus solicitudes en la sección dedicada.",
+				"info"
+			);
+			return;
+		}
 		if (items.length === 0) {
 			Swal.fire("Carrito vacío", "No hay productos en el carrito.", "info");
 			return;
 		}
 		try {
 			setSending(true);
+			const orderItems = items.map((i) => ({
+				productId: i.id,
+				ownerId: i.ownerId || null,
+				ownerEmail: i.ownerEmail || null,
+				categoriaId: i.categoriaId || null,
+				categoriaNombre: i.categoriaNombre || null,
+				name: i.name,
+				quantity: i.quantity,
+				price: i.price,
+			}));
+			const ownersInvolved = Array.from(
+				new Set(orderItems.map((i) => i.ownerId).filter(Boolean))
+			);
 			const payload = {
 				userId: user.uid,
 				clientName: user.nombre
 					? `${user.nombre} ${user.apellidoPaterno || ""}`.trim()
 					: user.displayName || null,
 				userEmail: user.email || null,
-				items: items.map((i) => ({
-					productId: i.id,
-					name: i.name,
-					quantity: i.quantity,
-					price: i.price,
-				})),
+				items: orderItems,
 				total,
+				ownersInvolved,
 				status: "pendiente",
 				createdAt: serverTimestamp(),
 			};
 			console.log("Cart -> creando order con payload", payload);
 			await addDoc(collection(db, "orders"), payload);
 
-			// ...existing limpiar carrito + Swal + navigate...
-			localStorage.removeItem("cart");
+			localStorage.removeItem(getCartKey(user.uid));
 			setItems([]);
 			await Swal.fire(
 				"Solicitud enviada",
@@ -87,6 +166,24 @@ const Cart = () => {
 			setSending(false);
 		}
 	};
+
+	if (isCompanyUser) {
+		return (
+			<div className="page-container">
+				<h1>Carrito de Compra</h1>
+				<p>
+					Las cuentas de empresa no gestionan compras desde el carrito. Dirígete a
+					la sección de solicitudes para revisar los pedidos de tus clientes.
+				</p>
+				<button
+					className="btn-primary"
+					onClick={() => navigate("/mis-pedidos")}
+				>
+					Ver solicitudes de clientes
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="page-container">

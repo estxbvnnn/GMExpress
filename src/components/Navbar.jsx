@@ -5,6 +5,12 @@ import gmexpressLogo from "../assets/img/gmexpresshorizontal.png";
 const Navbar = () => {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
+	const normalizeRole = (value) => (value || "").toLowerCase();
+	const userRole =
+		normalizeRole(user?.role) || normalizeRole(user?.tipoUsuario) || "";
+	const isCompanyUser = userRole === "empresa";
+	const isClientUser = userRole === "cliente";
+	const canUseCart = isClientUser;
 
 	const handleLogout = async () => {
 		await logout();
@@ -65,8 +71,15 @@ const Navbar = () => {
 						</button>
 					)}
 
-				{user && <Link to="/carrito">Carrito</Link>}
-				{user && <Link to="/mis-pedidos">Mis Pedidos</Link>}
+				{isClientUser && (
+					<>
+						<Link to="/carrito">Mi carrito</Link>
+						<Link to="/mis-pedidos">Mis pedidos</Link>
+					</>
+				)}
+				{isCompanyUser && (
+					<Link to="/mis-pedidos">Solicitudes clientes</Link>
+				)}
 			</nav>
 
 			<div className="navbar-right">
