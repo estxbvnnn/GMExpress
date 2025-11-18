@@ -326,6 +326,21 @@ const Catalog = () => {
 		}
 	};
 
+	const getCartKey = (uid) => `cart_${uid}`;
+
+	const readCartFromStorage = (uid) => {
+		try {
+			return JSON.parse(localStorage.getItem(getCartKey(uid)) || "[]");
+		} catch {
+			return [];
+		}
+	};
+
+	const writeCartToStorage = (uid, data) => {
+		localStorage.setItem(getCartKey(uid), JSON.stringify(data));
+		localStorage.removeItem("cart");
+	};
+
 	const handleAddToCart = async (product, quantity = 1) => {
 		const qty = Number(quantity) || 1;
 
@@ -338,12 +353,21 @@ const Catalog = () => {
 			navigate("/login");
 			return;
 		}
-		const stored = JSON.parse(localStorage.getItem("cart") || "[]");
-		const existing = stored.find((p) => p.id === product.id);
+
+		const enrichedProduct = {
+			...product,
+			ownerId: product.ownerId || product.owner?.id || null,
+			ownerEmail: product.ownerEmail || product.owner?.email || null,
+			categoriaId: product.categoriaId || selectedCategory?.id || null,
+			categoriaNombre: product.categoriaNombre || selectedCategory?.name || null,
+		};
+
+		const stored = readCartFromStorage(user.uid);
+		const existing = stored.find((p) => p.id === enrichedProduct.id);
 		let updated;
 		if (existing) {
 			updated = stored.map((p) =>
-				p.id === product.id
+				p.id === enrichedProduct.id
 					? { ...p, quantity: (p.quantity || 0) + qty }
 					: p
 			);
@@ -351,13 +375,13 @@ const Catalog = () => {
 			updated = [
 				...stored,
 				{
-					...product,
-					type: selectedCategory?.name || product.categoriaNombre,
+					...enrichedProduct,
+					type: selectedCategory?.name || enrichedProduct.categoriaNombre,
 					quantity: qty,
 				},
 			];
 		}
-		localStorage.setItem("cart", JSON.stringify(updated));
+		writeCartToStorage(user.uid, updated);
 		Swal.fire(
 			"Agregado",
 			`Se agregaron ${qty} unidad(es) al carrito.`,

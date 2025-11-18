@@ -21,6 +21,7 @@ const AdminPanel = () => {
 	const [loading, setLoading] = useState(true);
 	const [savingOrder, setSavingOrder] = useState(false);
 	const [savingUser, setSavingUser] = useState(false);
+	const [selectedOrderInfo, setSelectedOrderInfo] = useState(null);
 	const [editingUserId, setEditingUserId] = useState(null);
 	const [editUserForm, setEditUserForm] = useState({
 		nombre: "",
@@ -182,6 +183,9 @@ const AdminPanel = () => {
 		}
 	};
 
+	const openOrderInfo = (order) => setSelectedOrderInfo(order);
+	const closeOrderInfo = () => setSelectedOrderInfo(null);
+
 	// vistas por sección
 	const renderDashboard = () => (
 		<>
@@ -237,44 +241,123 @@ const AdminPanel = () => {
 			{orders.length === 0 ? (
 				<p>No hay pedidos registrados.</p>
 			) : (
-				<table className="admin-table admin-table-wide">
-					<thead>
-						<tr>
-							<th>ID</th>
-							<th>Cliente</th>
-							<th>Fecha</th>
-							<th>Total</th>
-							<th>Estado</th>
-							<th>Cambiar estado</th>
-						</tr>
-					</thead>
-					<tbody>
-						{orders.map((o) => (
-							<tr key={o.id}>
-								<td>{o.id}</td>
-								<td>{o.clientName || o.userEmail || "-"}</td>
-								<td>{formatDateTime(o.createdAt)}</td>
-								<td>{formatMoney(o.total)}</td>
-								<td>{mapStatusTag(o.status)}</td>
-								<td>
-									<select
-										className="admin-select"
-										value={o.status || "pendiente"}
-										onChange={(e) =>
-											handleChangeOrderStatus(o.id, e.target.value)
-										}
-										disabled={savingOrder}
-									>
-										<option value="pendiente">Pendiente</option>
-										<option value="proceso">En proceso</option>
-										<option value="entregado">Entregado</option>
-										<option value="cancelado">Cancelado</option>
-									</select>
-								</td>
+				<>
+					<table className="admin-table admin-table-wide">
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Cliente</th>
+								<th>Fecha</th>
+								<th>Total</th>
+								<th>Estado</th>
+								<th>Cambiar estado</th>
+								<th>Detalle</th>
 							</tr>
-						))}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{orders.map((o) => (
+								<tr key={o.id}>
+									<td>{o.id}</td>
+									<td>{o.clientName || o.userEmail || "-"}</td>
+									<td>{formatDateTime(o.createdAt)}</td>
+									<td>{formatMoney(o.total)}</td>
+									<td>{mapStatusTag(o.status)}</td>
+									<td>
+										<select
+											className="admin-select"
+											value={o.status || "pendiente"}
+											onChange={(e) => handleChangeOrderStatus(o.id, e.target.value)}
+											disabled={savingOrder}
+										>
+											<option value="pendiente">Pendiente</option>
+											<option value="proceso">En proceso</option>
+											<option value="entregado">Entregado</option>
+											<option value="cancelado">Cancelado</option>
+										</select>
+									</td>
+									<td>
+										<button className="btn-table" onClick={() => openOrderInfo(o)}>
+											Ver info
+										</button>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+
+					{selectedOrderInfo && (
+						<div
+							className="admin-modal-backdrop"
+							style={{
+								position: "fixed",
+								inset: 0,
+								background: "rgba(0,0,0,0.45)",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								zIndex: 1000,
+							}}
+							onClick={closeOrderInfo}
+						>
+							<div
+								className="admin-modal-content"
+								style={{
+									background: "#fff",
+									padding: 24,
+									borderRadius: 12,
+									maxWidth: 520,
+									width: "90%",
+									boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+								}}
+								onClick={(e) => e.stopPropagation()}
+							>
+								<div
+									style={{
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center",
+										marginBottom: 12,
+									}}
+								>
+									<h3 style={{ margin: 0 }}>Detalle de la solicitud</h3>
+									<button className="btn-secondary" onClick={closeOrderInfo}>
+										Cerrar
+									</button>
+								</div>
+								<p>
+									<b>Cliente:</b>{" "}
+									{selectedOrderInfo.clientName ||
+										selectedOrderInfo.userEmail ||
+										"-"}
+								</p>
+								<p>
+									<b>Fecha:</b> {formatDateTime(selectedOrderInfo.createdAt)}
+								</p>
+								<p>
+									<b>Total:</b> {formatMoney(selectedOrderInfo.total)}
+								</p>
+								<p>
+									<b>Estado:</b>{" "}
+									{mapStatusTag(selectedOrderInfo.status)}
+								</p>
+								<hr style={{ margin: "16px 0" }} />
+								<h4>Productos solicitados</h4>
+								{selectedOrderInfo.items?.length ? (
+									<ul style={{ paddingLeft: 20 }}>
+										{selectedOrderInfo.items.map((item, idx) => (
+											<li key={`${selectedOrderInfo.id}-${idx}`}>
+												{item.name} · {item.quantity} un. ·{" "}
+												{formatMoney((item.price || 0) * (item.quantity || 0))}
+											</li>
+										))}
+									</ul>
+								) : (
+									<p>No hay productos registrados en esta solicitud.</p>
+								)}
+							</div>
+						</div>
+					)}
+				</>
 			)}
 		</>
 	);
@@ -894,8 +977,7 @@ const AdminPanel = () => {
 			<h1>Mantenedor de usuarios</h1>
 			<p>
 				Listado de usuarios registrados en <b>usuarios</b>. Puedes editar sus datos
-				básicos y rol (cliente, empresa, admin). Solo tu cuenta conserva el rol{" "}
-				<b>superadmin</b>.
+				básicos como nombres, apellidos, correo, tipo de usuario.
 			</p>
 			{usersList.length === 0 ? (
 				<p>No hay usuarios registrados.</p>
