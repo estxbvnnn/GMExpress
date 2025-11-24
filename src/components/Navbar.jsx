@@ -2,15 +2,30 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import gmexpressLogo from "../assets/img/gmexpresshorizontal.png";
 
+const cartButtonStyle = {
+	display: "inline-flex",
+	alignItems: "center",
+	justifyContent: "center",
+	gap: 6,
+	padding: "10px 22px",
+	borderRadius: 999,
+	background: "linear-gradient(120deg,#3dd598,#00a86b)",
+	color: "#042414",
+	fontWeight: 600,
+	border: "none",
+	textDecoration: "none",
+	boxShadow: "0 14px 24px rgba(4,32,20,0.18)",
+	transition: "transform 0.2s ease, box-shadow 0.2s ease",
+};
+
 const Navbar = () => {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
-	const normalizeRole = (value) => (value || "").toLowerCase();
+	const normalizeRole = (value = "") => value.toLowerCase();
 	const userRole =
 		normalizeRole(user?.role) || normalizeRole(user?.tipoUsuario) || "";
 	const isCompanyUser = userRole === "empresa";
-	const isClientUser = userRole === "cliente";
-	const canUseCart = isClientUser;
+	const canUseCart = Boolean(user) && !isCompanyUser;
 
 	const handleLogout = async () => {
 		await logout();
@@ -32,6 +47,13 @@ const Navbar = () => {
 	const handleGoAdminPanel = () => {
 		if (!user) return;
 		navigate("/admin");
+	};
+
+	const handleCartButtonHover = (event, hovered) => {
+		event.currentTarget.style.transform = hovered ? "translateY(-2px)" : "translateY(0)";
+		event.currentTarget.style.boxShadow = hovered
+			? "0 18px 32px rgba(4,32,20,0.25)"
+			: cartButtonStyle.boxShadow;
 	};
 
 	return (
@@ -71,12 +93,17 @@ const Navbar = () => {
 						</button>
 					)}
 
-				{isClientUser && (
-					<>
-						<Link to="/carrito">Mi carrito</Link>
-						<Link to="/mis-pedidos">Mis pedidos</Link>
-					</>
+				{canUseCart && (
+					<Link
+						to="/carrito"
+						style={cartButtonStyle}
+						onMouseEnter={(e) => handleCartButtonHover(e, true)}
+						onMouseLeave={(e) => handleCartButtonHover(e, false)}
+					>
+						Ir al carrito
+					</Link>
 				)}
+
 				{isCompanyUser && (
 					<Link to="/mis-pedidos">Solicitudes clientes</Link>
 				)}

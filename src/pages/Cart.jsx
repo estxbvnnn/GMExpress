@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
+const TAX_RATE = 0.19;
+
 const getCartKey = (uid) => `cart_${uid}`;
 
 const readCart = (uid) => {
@@ -98,10 +100,12 @@ const Cart = () => {
 		updateCart(updated);
 	};
 
-	const total = items.reduce(
+	const subtotal = items.reduce(
 		(sum, i) => sum + (i.price || 0) * i.quantity,
 		0
 	);
+	const tax = Math.round(subtotal * TAX_RATE);
+	const total = subtotal + tax;
 
 	const handleCreateOrder = async () => {
 		if (!user) return;
@@ -139,6 +143,9 @@ const Cart = () => {
 					: user.displayName || null,
 				userEmail: user.email || null,
 				items: orderItems,
+				subtotal,
+				tax,
+				taxRate: TAX_RATE,
 				total,
 				ownersInvolved,
 				status: "pendiente",
@@ -167,84 +174,147 @@ const Cart = () => {
 		}
 	};
 
+	const cartStyles = {
+		wrapper: { display: "flex", flexDirection: "column", gap: 20 },
+		card: {
+			background: "#fff",
+			borderRadius: 28,
+			boxShadow: "0 30px 60px rgba(8,40,28,0.12)",
+			padding: 28,
+			border: "1px solid rgba(9,72,40,0.08)",
+		},
+		emptyCard: {
+			background: "#f4f9f6",
+			borderRadius: 24,
+			padding: 32,
+			textAlign: "center",
+			color: "#4c5f55",
+		},
+		table: { width: "100%", borderCollapse: "separate", borderSpacing: "0 8px" },
+		summaryBox: {
+			display: "flex",
+			flexDirection: "column",
+			gap: 12,
+			padding: 24,
+			borderRadius: 20,
+			background: "#042f1b",
+			color: "#fff",
+			boxShadow: "0 20px 45px rgba(4,32,20,0.3)",
+		},
+		summaryRow: {
+			display: "flex",
+			justifyContent: "space-between",
+			alignItems: "center",
+			fontSize: "1rem",
+		},
+		primaryBtn: {
+			borderRadius: 999,
+			padding: "12px 28px",
+			border: "none",
+			background: "linear-gradient(120deg,#34d593,#0ea164)",
+			color: "#031c10",
+			fontWeight: 600,
+			boxShadow: "0 18px 28px rgba(3,37,20,0.25)",
+			cursor: "pointer",
+		},
+		linkBtn: {
+			borderRadius: 999,
+			padding: "12px 24px",
+			border: "1px solid #0d6a41",
+			background: "transparent",
+			color: "#0d6a41",
+			fontWeight: 600,
+			cursor: "pointer",
+		},
+	};
+
 	if (isCompanyUser) {
 		return (
-			<div className="page-container">
-				<h1>Carrito de Compra</h1>
-				<p>
-					Las cuentas de empresa no gestionan compras desde el carrito. Dirígete a
-					la sección de solicitudes para revisar los pedidos de tus clientes.
-				</p>
-				<button
-					className="btn-primary"
-					onClick={() => navigate("/mis-pedidos")}
-				>
-					Ver solicitudes de clientes
-				</button>
+			<div className="page-container" style={cartStyles.wrapper}>
+				<div style={cartStyles.emptyCard}>
+					<h1>Carrito de Compra</h1>
+					<p>
+						Las cuentas de empresa no gestionan compras desde el carrito. Dirígete a la sección de
+						solicitudes para revisar los pedidos de tus clientes.
+					</p>
+					<button style={cartStyles.linkBtn} onClick={() => navigate("/mis-pedidos")}>
+						Ver solicitudes de clientes
+					</button>
+				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="page-container">
+		<div className="page-container" style={cartStyles.wrapper}>
 			<h1>Carrito de Compra</h1>
 			{items.length === 0 ? (
-				<p>No hay productos en el carrito.</p>
+				<div style={cartStyles.emptyCard}>No hay productos en el carrito.</div>
 			) : (
 				<>
-					<table className="cart-table">
-						<thead>
-							<tr>
-								<th>Producto</th>
-								<th>Cantidad</th>
-								<th>Precio</th>
-								<th>Subtotal</th>
-								<th></th>
-							</tr>
-						</thead>
-						<tbody>
-							{items.map((i) => (
-								<tr key={i.id}>
-									<td>{i.name}</td>
-									<td>
-										<button
-											className="btn-qty"
-											onClick={() => handleQuantity(i.id, -1)}
-										>
-											-
-										</button>
-										<span>{i.quantity}</span>
-										<button
-											className="btn-qty"
-											onClick={() => handleQuantity(i.id, 1)}
-										>
-											+
-										</button>
-									</td>
-									<td>${i.price?.toLocaleString("es-CL")}</td>
-									<td>
-										$
-										{(i.price * i.quantity).toLocaleString("es-CL")}
-									</td>
-									<td>
-										<button
-											className="btn-table-danger"
-											onClick={() => handleRemove(i.id)}
-										>
-											Eliminar
-										</button>
-									</td>
+					<div style={cartStyles.card}>
+						<table style={cartStyles.table}>
+							<thead>
+								<tr>
+									<th>Producto</th>
+									<th>Cantidad</th>
+									<th>Precio</th>
+									<th>Subtotal</th>
+									<th></th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-					<div className="cart-summary">
-						<p>Total: ${total.toLocaleString("es-CL")}</p>
-						<button
-							className="btn-primary"
-							onClick={handleCreateOrder}
-							disabled={sending}
-						>
+							</thead>
+							<tbody>
+								{items.map((i) => (
+									<tr key={i.id}>
+										<td>{i.name}</td>
+										<td>
+											<button
+												className="btn-qty"
+												onClick={() => handleQuantity(i.id, -1)}
+											>
+												-
+											</button>
+											<span>{i.quantity}</span>
+											<button
+												className="btn-qty"
+												onClick={() => handleQuantity(i.id, 1)}
+											>
+												+
+											</button>
+										</td>
+										<td>${i.price?.toLocaleString("es-CL")}</td>
+										<td>
+											$
+											{(i.price * i.quantity).toLocaleString("es-CL")}
+										</td>
+										<td>
+											<button
+												className="btn-table-danger"
+												onClick={() => handleRemove(i.id)}
+											>
+												Eliminar
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+					<div style={cartStyles.summaryBox}>
+						<div style={cartStyles.summaryRow}>
+							<span>Subtotal neto</span>
+							<strong>${subtotal.toLocaleString("es-CL")}</strong>
+						</div>
+						<div style={cartStyles.summaryRow}>
+							<span>IVA 19%</span>
+							<strong>${tax.toLocaleString("es-CL")}</strong>
+						</div>
+						<hr style={{ borderColor: "rgba(255,255,255,0.2)" }} />
+						<div style={{ ...cartStyles.summaryRow, fontSize: "1.1rem" }}>
+							<span>Total con IVA</span>
+							<strong>${total.toLocaleString("es-CL")}</strong>
+						</div>
+						<button style={cartStyles.primaryBtn} onClick={handleCreateOrder} disabled={sending}>
 							{sending ? "Enviando..." : "Generar solicitud de venta"}
 						</button>
 					</div>

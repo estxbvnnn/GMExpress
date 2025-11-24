@@ -269,6 +269,19 @@ export const CATALOG = [
 	},
 ];
 
+const CATEGORY_ART = {
+	"alimentacion-transportada":
+		"https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=60",
+	"servicio-presencial":
+		"https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=60",
+	"concesion-casinos":
+		"https://images.unsplash.com/photo-1481833761820-0509d3217039?auto=format&fit=crop&w=900&q=60",
+	"coffee-break-eventos":
+		"https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&w=900&q=60",
+	"reposteria-snack":
+		"https://images.unsplash.com/photo-1481391032119-d89fee407e44?auto=format&fit=crop&w=900&q=60",
+};
+
 const Catalog = () => {
 	const { user } = useAuth();
 	const navigate = useNavigate();
@@ -398,165 +411,328 @@ const Catalog = () => {
 		setSelectedItemId(null);
 	};
 
-	return (
-		<div className="page-container">
-			<h1>Catálogo de Productos y Servicios</h1>
+	const catalogStyles = {
+		page: { display: "flex", flexDirection: "column", gap: 32 },
+		hero: {
+			display: "grid",
+			gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+			gap: 24,
+			background: "linear-gradient(135deg,#052b1b,#0c5d3b)",
+			color: "#e4fff2",
+			padding: "40px 32px",
+			borderRadius: 32,
+			boxShadow: "0 30px 60px rgba(5,45,30,0.35)",
+			overflow: "hidden",
+		},
+		productTableWrap: {
+			background: "#ffffff",
+			borderRadius: 28,
+			boxShadow: "0 25px 55px rgba(8,38,26,0.14)",
+			padding: 12,
+			overflowX: "auto",
+			border: "1px solid rgba(8,60,38,0.08)",
+		},
+		productTable: {
+			width: "100%",
+			borderCollapse: "separate",
+			borderSpacing: "0 10px",
+		},
+		productTableHeadCell: {
+			textAlign: "left",
+			fontSize: "0.85rem",
+			textTransform: "uppercase",
+			color: "#0f5134",
+			padding: "12px 16px",
+			borderBottom: "1px solid rgba(8,60,38,0.12)",
+		},
+		productTableRow: {
+			background: "#f8fbf8",
+			borderRadius: 18,
+			boxShadow: "0 10px 25px rgba(5,35,23,0.08)",
+		},
+		productTableCell: {
+			padding: "16px 18px",
+			fontSize: "0.95rem",
+			color: "#1d3429",
+		},
+		productActions: { display: "flex", alignItems: "center", gap: 10 },
+		tableQtyInput: {
+			width: 70,
+			borderRadius: 999,
+			border: "1px solid rgba(9,72,40,0.2)",
+			padding: "6px 10px",
+			textAlign: "center",
+			fontWeight: 600,
+		},
+		tableBtn: {
+			borderRadius: 999,
+			border: "none",
+			padding: "10px 18px",
+			background: "linear-gradient(120deg,#34d593,#0ea164)",
+			color: "#032015",
+			fontWeight: 600,
+			cursor: "pointer",
+			boxShadow: "0 14px 24px rgba(4,32,20,0.2)",
+		},
+		sectionTitle: { margin: "24px 0 8px", color: "#0b3826" },
+		categoryGrid: {
+			display: "grid",
+			gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+			gap: 20,
+		},
+		categoryCard: {
+			position: "relative",
+			borderRadius: 28,
+			overflow: "hidden",
+			minHeight: 220,
+			color: "#fff",
+			cursor: "pointer",
+			boxShadow: "0 25px 55px rgba(7,35,25,0.25)",
+		},
+		categoryOverlay: {
+			position: "absolute",
+			inset: 0,
+			background: "linear-gradient(120deg,rgba(3,20,13,0.85),rgba(7,66,40,0.55))",
+		},
+		categoryBody: { position: "relative", padding: 24, display: "flex", flexDirection: "column", gap: 10 },
+		productGrid: {
+			display: "grid",
+			gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+			gap: 20,
+		},
+		detailHeader: {
+			display: "flex",
+			justifyContent: "space-between",
+			alignItems: "center",
+			gap: 16,
+			flexWrap: "wrap",
+			marginTop: 12,
+		},
+		backBtn: {
+			borderRadius: 999,
+			border: "1px solid rgba(8,50,30,0.3)",
+			background: "transparent",
+			padding: "8px 18px",
+			fontWeight: 600,
+			color: "#0c5d3b",
+			cursor: "pointer",
+		},
+		productCard: {
+			borderRadius: 28,
+			background: "#fff",
+			boxShadow: "0 25px 55px rgba(8,38,26,0.14)",
+			display: "flex",
+			flexDirection: "column",
+			overflow: "hidden",
+			border: "1px solid rgba(10,70,44,0.08)",
+		},
+		productBody: { padding: 20, display: "flex", flexDirection: "column", gap: 10 },
+		tag: {
+			alignSelf: "flex-start",
+			padding: "4px 12px",
+			borderRadius: 999,
+			background: "rgba(4,89,58,0.12)",
+			color: "#0c5d3b",
+			fontSize: 12,
+			fontWeight: 600,
+		},
+		cardFooter: {
+			borderTop: "1px solid rgba(10,70,44,0.08)",
+			padding: "16px 20px",
+			display: "flex",
+			justifyContent: "space-between",
+			alignItems: "center",
+			gap: 10,
+		},
+		qtyInput: {
+			width: 80,
+			borderRadius: 999,
+			border: "1px solid #d7e7df",
+			textAlign: "center",
+			padding: "6px 10px",
+			fontWeight: 600,
+		},
+		primaryBtn: {
+			borderRadius: 999,
+			border: "none",
+			padding: "10px 18px",
+			fontWeight: 600,
+			color: "#032012",
+			background: "linear-gradient(120deg,#3dd598,#0da064)",
+			boxShadow: "0 18px 32px rgba(5,38,24,0.2)",
+			cursor: "pointer",
+		},
+		emptyState: {
+			background: "linear-gradient(120deg,#f2faf5,#e5f3ea)",
+			borderRadius: 24,
+			padding: 32,
+			textAlign: "center",
+			color: "#4b6b5a",
+		},
+	};
 
-			{/* NUEVO: acceso rápido al historial */}
-			{user && (
+	const getCategoryImage = (catId) =>
+		CATEGORY_ART[catId] ||
+		"https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=60";
+
+	return (
+		<div className="page-container" style={catalogStyles.page}>
+			<section style={catalogStyles.hero}>
+				<div>
+					<h1 style={{ margin: "12px 0 8px" }}>Selecciona líneas, menús y proveedores certificados</h1>
+					<p style={{ maxWidth: 520, lineHeight: 1.6 }}>
+						Explora categorías curadas, revisa menús de referencia y añade productos de empresas socias
+						a tu carrito para enviar solicitudes al equipo GM Express.
+					</p>
+					<div style={catalogStyles.heroStats}>
+						<div style={catalogStyles.heroCard}>
+							<p style={{ margin: 0, opacity: 0.7 }}>Menús disponibles</p>
+							<h3 style={{ margin: "4px 0 0" }}>+250</h3>
+						</div>
+						<div style={catalogStyles.heroCard}>
+							<p style={{ margin: 0, opacity: 0.7 }}>Productos Activos</p>
+							<h3 style={{ margin: "4px 0 0" }}>{companyProducts.length}</h3>
+						</div>
+					</div>
+				</div>
 				<div
 					style={{
-						marginBottom: 12,
+						borderRadius: 28,
+						background: "rgba(255,255,255,0.08)",
+						padding: 24,
 						display: "flex",
-						gap: 8,
-						flexWrap: "wrap",
+						flexDirection: "column",
+						gap: 12,
 					}}
 				>
-					<button
-						type="button"
-						className="btn-secondary"
-						onClick={() => navigate("/mis-pedidos")}
-					>
-						Ver historial de compras
+					<h3 style={{ margin: 0 }}>Tu panel digest</h3>
+					<p style={{ margin: 0, opacity: 0.75 }}>
+						Accede a “Mis pedidos” para monitorear solicitudes enviadas y estados de entrega.
+					</p>
+					{user ? (
+						<button
+							type="button"
+							style={{ ...catalogStyles.primaryBtn, alignSelf: "flex-start" }}
+							onClick={() => navigate("/mis-pedidos")}
+						>
+							Ver mis pedidos
+						</button>
+					) : (
+						<button
+							type="button"
+							style={{ ...catalogStyles.primaryBtn, alignSelf: "flex-start" }}
+							onClick={() => navigate("/login")}
+						>
+							Iniciar sesión
+						</button>
+					)}
+				</div>
+			</section>
+
+			{!selectedCategory && (
+				<header style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+					<h2 style={catalogStyles.sectionTitle}>Catálogo GM Express</h2>
+					<p style={{ color: "#5a6b63", margin: 0 }}>
+						Selecciona una categoría para revisar los productos disponibles y armar tus solicitudes.
+					</p>
+				</header>
+			)}
+
+			{!selectedCategory ? (
+				<>
+					<h2 style={catalogStyles.sectionTitle}>Categorías principales</h2>
+					<div style={catalogStyles.categoryGrid}>
+						{CATALOG.map((cat) => (
+							<div
+								key={cat.id}
+								style={{ ...catalogStyles.categoryCard, backgroundImage: `url(${getCategoryImage(cat.id)})` }}
+								onClick={() => {
+									setSelectedCategoryId(cat.id);
+									setSelectedItemId(null);
+								}}
+							>
+								<div style={catalogStyles.categoryOverlay} />
+								<div style={catalogStyles.categoryBody}>
+									<h3 style={{ margin: 0 }}>{cat.name}</h3>
+									<p style={{ margin: 0, opacity: 0.8 }}>{cat.description}</p>
+									<span style={{ fontSize: 13, opacity: 0.7 }}>
+										{cat.items.length} menús de referencia
+									</span>
+								</div>
+							</div>
+						))}
+					</div>
+				</>
+			) : (
+				<div style={catalogStyles.detailHeader}>
+					<div>
+						<h2 style={{ ...catalogStyles.sectionTitle, marginBottom: 4 }}>{selectedCategory.name}</h2>
+						<p style={{ margin: 0, color: "#5a6b63" }}>{selectedCategory.description}</p>
+					</div>
+					<button type="button" style={catalogStyles.backBtn} onClick={handleBackToCategories}>
+						← Volver a categorías
 					</button>
 				</div>
 			)}
 
-			{/* Breadcrumb simple */}
-			<div className="catalog-breadcrumb">
-				<span
-					className={!selectedCategory ? "breadcrumb-active" : "breadcrumb-link"}
-					onClick={handleBackToCategories}
-				>
-					Categorías
-				</span>
-				{selectedCategory && (
-					<>
-						<span className="breadcrumb-sep">/</span>
-						<span
-							className={
-								!selectedItem ? "breadcrumb-active" : "breadcrumb-link"
-							}
-							onClick={handleBackToItems}
-						>
-							{selectedCategory.name}
-						</span>
-					</>
-				)}
-				{selectedItem && (
-					<>
-						<span className="breadcrumb-sep">/</span>
-						<span className="breadcrumb-active">{selectedItem.name}</span>
-					</>
-				)}
-			</div>
-
-			{/* Nivel 1: listado de categorías */}
-			{!selectedCategory && (
-				<div className="catalog-grid catalog-grid-categories">
-					{CATALOG.map((cat) => (
-						<div
-							key={cat.id}
-							className="catalog-card catalog-card-category"
-							onClick={() => {
-								setSelectedCategoryId(cat.id);
-								setSelectedItemId(null);
-							}}
-						>
-							<div className="catalog-card-body">
-								<h3>{cat.name}</h3>
-								<p className="catalog-description">{cat.description}</p>
-								{/* Puedes quitar este conteo si ya no usas items estáticos */}
-								<span className="badge-count">Productos disponibles</span>
-							</div>
-						</div>
-					))}
-				</div>
-			)}
-
-			{/* Nivel 2: productos dentro de la categoría (solo productos de BD) */}
-			{selectedCategory && !selectedItem && (
+			{selectedCategory && (
 				<>
-					<p className="catalog-category-summary">
-						{selectedCategory.description}
-					</p>
-
-					<h3>
-						Productos del catálogo de {selectedCategory.name}
-					</h3>
+					<h3 style={{ margin: "12px 0" }}>Proveedores asociados</h3>
 					{loadingProducts ? (
 						<p>Cargando productos...</p>
 					) : companyItemsForCategory.length === 0 ? (
-						<p>No hay productos para esta categoría.</p>
+						<div style={catalogStyles.emptyState}>No hay proveedores con productos en esta categoría.</div>
 					) : (
-						<div className="catalog-grid">
-							{companyItemsForCategory.map((p) => (
-								<div
-									key={p.id}
-									className="catalog-card catalog-card-item"
-								>
-									<div className="catalog-card-body">
-										<h3>{p.name}</h3>
-										<p className="catalog-description">
-											{p.description}
-										</p>
-										{p.price > 0 && (
-											<p className="catalog-price">
-												${p.price.toLocaleString("es-CL")}
-											</p>
-										)}
-									</div>
-									<div className="catalog-card-footer">
-										{/* NUEVO: selector de cantidad */}
-										<div
-											style={{
-												display: "flex",
-												alignItems: "center",
-												gap: 8,
-											}}
-										>
-											<label
-												style={{
-													fontSize: "0.8rem",
-													color: "#666",
-												}}
-											>
-												Cant.
-											</label>
-											<input
-												type="number"
-												min="1"
-												value={quantities[p.id] || 1}
-												onChange={(e) =>
-													handleQuantityChange(p.id, e.target.value)
-												}
-												style={{
-													width: 60,
-													borderRadius: 999,
-													border: "1px solid #ddd",
-													padding: "4px 8px",
-													fontSize: "0.85rem",
-												}}
-											/>
-										</div>
-										<button
-											className="btn-primary"
-											onClick={() =>
-												handleAddToCart(p, quantities[p.id] || 1)
-											}
-										>
-											Agregar al carrito
-										</button>
-									</div>
-								</div>
-							))}
+						<div style={catalogStyles.productTableWrap}>
+							<table style={catalogStyles.productTable}>
+								<thead>
+									<tr>
+										{["Producto", "Proveedor", "Descripción", "Precio", "Acciones"].map((label) => (
+											<th key={label} style={catalogStyles.productTableHeadCell}>
+												{label}
+											</th>
+										))}
+									</tr>
+								</thead>
+								<tbody>
+									{companyItemsForCategory.map((p) => (
+										<tr key={p.id} style={catalogStyles.productTableRow}>
+											<td style={catalogStyles.productTableCell}>
+												<strong>{p.name}</strong>
+												<p style={{ margin: "4px 0 0", color: "#5e6b64", fontSize: "0.85rem" }}>
+													{p.categoriaNombre || selectedCategory.name}
+												</p>
+											</td>
+											<td style={catalogStyles.productTableCell}>{p.ownerEmail || "Proveedor inscrito"}</td>
+											<td style={catalogStyles.productTableCell}>{p.description}</td>
+											<td style={catalogStyles.productTableCell}>
+												{p.price > 0 ? `$${p.price.toLocaleString("es-CL")}` : "A convenir"}
+											</td>
+											<td style={catalogStyles.productTableCell}>
+												<div style={catalogStyles.productActions}>
+													<input
+														type="number"
+														min="1"
+														value={quantities[p.id] || 1}
+														onChange={(e) => handleQuantityChange(p.id, e.target.value)}
+														style={catalogStyles.tableQtyInput}
+													/>
+													<button
+														style={catalogStyles.tableBtn}
+														onClick={() => handleAddToCart(p, quantities[p.id] || 1)}
+													>
+														Agregar
+													</button>
+												</div>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
 						</div>
 					)}
 				</>
 			)}
-
-			{/* Nivel 3 (detalle estático) ya no es necesario si solo usas productos de BD.
-			    Puedes eliminar este bloque si no lo usas en otra parte. */}
 		</div>
 	);
 };

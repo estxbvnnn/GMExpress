@@ -14,6 +14,40 @@ import { useAuth } from "../context/AuthContext";
 
 const AdminPanel = () => {
 	const { user } = useAuth();
+	const panelStyles = {
+		mainShell: {
+			background: "#f3f7f5",
+			padding: "36px",
+			borderRadius: "32px",
+			minHeight: "100vh",
+		},
+		section: {
+			background: "#fff",
+			borderRadius: 24,
+			padding: "28px 32px",
+			boxShadow: "0 25px 55px rgba(4,35,22,0.08)",
+			marginBottom: 28,
+		},
+		sectionHeader: {
+			display: "flex",
+			flexDirection: "column",
+			gap: 6,
+			marginBottom: 20,
+		},
+		kpiGrid: {
+			display: "grid",
+			gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
+			gap: 18,
+			marginBottom: 24,
+		},
+		kpiCard: (accent) => ({
+			padding: 20,
+			borderRadius: 24,
+			color: "#0e2418",
+			background: `linear-gradient(135deg, ${accent}15, #ffffff)`,
+			border: `1px solid ${accent}40`,
+		}),
+	};
 	const [activeSection, setActiveSection] = useState("dashboard");
 	const [orders, setOrders] = useState([]);
 	const [products, setProducts] = useState([]);
@@ -39,6 +73,10 @@ const AdminPanel = () => {
 	const [reportChannel, setReportChannel] = useState("TODOS");
 	const [reportCategory, setReportCategory] = useState("TODAS");
 	const [reportRequested, setReportRequested] = useState(false);
+
+	// NUEVO: estado para métricas mensuales y distribución de estados
+	const [monthlySales, setMonthlySales] = useState([]);
+	const [statusBuckets, setStatusBuckets] = useState([]);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -86,6 +124,52 @@ const AdminPanel = () => {
 		}
 	}, [user]);
 
+	useEffect(() => {
+		if (!orders.length) {
+			setMonthlySales([]);
+			setStatusBuckets([]);
+			return;
+		}
+		const monthsBack = 6;
+		const now = new Date();
+		const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+		const labels = [];
+		const buckets = {};
+		for (let i = monthsBack - 1; i >= 0; i--) {
+			const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+			const key = monthKey(ref);
+			labels.push({ key, label: ref.toLocaleDateString("es-CL", { month: "short" }) });
+			buckets[key] = 0;
+		}
+		orders.forEach((o) => {
+			if (o.status !== "entregado" || !o.createdAt?.toDate) return;
+			const d = o.createdAt.toDate();
+			const key = monthKey(new Date(d.getFullYear(), d.getMonth(), 1));
+			if (key in buckets) buckets[key] += o.total || 0;
+		});
+		setMonthlySales(labels.map((m) => ({ label: m.label, total: buckets[m.key] })));
+
+		const statusMap = orders.reduce(
+			(acc, o) => {
+				if (acc[o.status]) acc[o.status] += 1;
+				return acc;
+			},
+			{ pendiente: 0, proceso: 0, entregado: 0, cancelado: 0 }
+		);
+		setStatusBuckets(
+			Object.entries(statusMap).map(([status, count]) => ({
+				status,
+				count,
+				label: mapStatusLabel(status),
+			}))
+		);
+	}, [orders]);
+
+	const totalStatusCount = statusBuckets.reduce(
+		(sum, bucket) => sum + (bucket.count || 0),
+		0
+	);
+
 	// Si por alguna razón llega aquí alguien que no es superadmin, muestra aviso
 	if (!user || user.role !== "superadmin") {
 		return (
@@ -118,6 +202,21 @@ const AdminPanel = () => {
 		if (!ts || !ts.toDate) return "-";
 		const d = ts.toDate();
 		return d.toLocaleString("es-CL");
+	};
+
+	const mapStatusLabel = (status = "") => {
+		switch (status) {
+			case "pendiente":
+				return "Pendiente";
+			case "proceso":
+				return "En proceso";
+			case "entregado":
+				return "Entregado";
+			case "cancelado":
+				return "Cancelado";
+			default:
+				return "Sin estado";
+		}
 	};
 
 	const mapStatusTag = (status) => {
@@ -186,52 +285,134 @@ const AdminPanel = () => {
 	const openOrderInfo = (order) => setSelectedOrderInfo(order);
 	const closeOrderInfo = () => setSelectedOrderInfo(null);
 
+	// NUEVO: renderizar gráficas simples en el dashboard
+	const renderCharts = () => {
+		const hasSalesData = monthlySales.length > 0;
+		return (
+			<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
+				<div style={{ background: "#fff", borderRadius: 24, padding: 24, boxShadow: "0 20px 45px rgba(7,40,25,0.12)" }}>
+					<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+						<div>
+							<p style={{ fontSize: 12, color: "#5b6c64", margin: 0 }}>Ventas últimos 6 meses</p>
+							<h3 style={{ margin: "6px 0" }}>{formatMoney(ventasMes)}</h3>
+						</div>
+						<span style={{ fontSize: 12, color: "#4c6459" }}>CLP</span>
+					</div>
+					{hasSalesData ? (
+						<div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 140 }}>
+							{monthlySales.map((m) => (
+								<div key={m.label} style={{ flex: 1, textAlign: "center" }}>
+									<div
+										style={{
+											height: Math.max(
+												(m.total / Math.max(...monthlySales.map((x) => x.total), 1)) * 100,
+												6
+											),
+											borderRadius: "12px 12px 4px 4px",
+											background: "linear-gradient(180deg,#35d392,#0a8c57)",
+										}}
+										title={`$${m.total.toLocaleString("es-CL")}`}
+									/>
+									<span style={{ fontSize: 12, color: "#5d6b63" }}>{m.label}</span>
+								</div>
+							))}
+						</div>
+					) : (
+						<p style={{ color: "#8c9b94", fontSize: 13, margin: 0 }}>
+							No hay ventas registradas en los últimos meses.
+						</p>
+					)}
+				</div>
+				<div style={{ background: "#fff", borderRadius: 24, padding: 24, boxShadow: "0 20px 45px rgba(7,40,25,0.12)" }}>
+					<p style={{ fontSize: 12, color: "#5b6c64", margin: 0 }}>Estado de pedidos</p>
+					<h3 style={{ margin: "6px 0" }}>{totalStatusCount} en total</h3>
+					<div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+						{statusBuckets.map((bucket) => (
+							<div key={bucket.status} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+								<div
+									style={{
+										width: 12,
+										height: 12,
+										borderRadius: "50%",
+										background:
+											bucket.status === "entregado"
+												? "#00a86b"
+												: bucket.status === "proceso"
+												? "#f5a524"
+												: bucket.status === "pendiente"
+												? "#d97706"
+												: "#b91c1c",
+									}}
+								/>
+								<span style={{ flex: 1, fontSize: 14 }}>{bucket.label}</span>
+								<span style={{ fontWeight: 600 }}>{bucket.count}</span>
+							</div>
+						))}
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	// vistas por sección
 	const renderDashboard = () => (
 		<>
-			<h1>Gestión de Solicitudes y Ventas</h1>
-			<div className="kpis">
-				<div className="kpi-card kpi-alert">
-					<h3>Nuevas solicitudes</h3>
-					<p>{nuevasSolicitudes}</p>
+			<div style={panelStyles.section}>
+				<div style={panelStyles.sectionHeader}>
+					<h1 style={{ margin: 0 }}>Gestión de solicitudes y ventas</h1>
+					<p style={{ color: "#64756d", margin: 0 }}>
+						Revisa métricas clave y el estado operativo en tiempo real.
+					</p>
 				</div>
-				<div className="kpi-card kpi-success">
-					<h3>Ventas del mes</h3>
-					<p>{formatMoney(ventasMes)}</p>
+				<div style={panelStyles.kpiGrid}>
+					<div style={panelStyles.kpiCard("#f97316")}>
+						<h3>Nuevas solicitudes</h3>
+						<p style={{ fontSize: "2rem", margin: 0 }}>{nuevasSolicitudes}</p>
+					</div>
+					<div style={panelStyles.kpiCard("#00a86b")}>
+						<h3>Ventas del mes</h3>
+						<p style={{ fontSize: "2rem", margin: 0 }}>{formatMoney(ventasMes)}</p>
+					</div>
+					<div style={panelStyles.kpiCard("#3b82f6")}>
+						<h3>Productos activos</h3>
+						<p style={{ fontSize: "2rem", margin: 0 }}>{productosActivos}</p>
+					</div>
 				</div>
-				<div className="kpi-card kpi-primary">
-					<h3>Productos activos</h3>
-					<p>{productosActivos}</p>
-				</div>
+				{renderCharts()}
 			</div>
 
-			<h2>Últimos pedidos</h2>
-			{orders.length === 0 ? (
-				<p>No hay pedidos registrados.</p>
-			) : (
-				<table className="admin-table admin-table-wide">
-					<thead>
-						<tr>
-							<th>ID</th>
-							<th>Cliente</th>
-							<th>Fecha</th>
-							<th>Total</th>
-							<th>Estado</th>
-						</tr>
-					</thead>
-					<tbody>
-						{orders.slice(0, 10).map((o) => (
-							<tr key={o.id}>
-								<td>{o.id}</td>
-								<td>{o.clientName || o.userEmail || "-"}</td>
-								<td>{formatDateTime(o.createdAt)}</td>
-								<td>{formatMoney(o.total)}</td>
-								<td>{mapStatusTag(o.status)}</td>
+			<div style={panelStyles.section}>
+				<div style={panelStyles.sectionHeader}>
+					<h2 style={{ margin: 0 }}>Últimos pedidos</h2>
+					<p style={{ color: "#64756d", margin: 0 }}>Seguimiento de las 10 solicitudes más recientes.</p>
+				</div>
+				{orders.length === 0 ? (
+					<p>No hay pedidos registrados.</p>
+				) : (
+					<table className="admin-table admin-table-wide">
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Cliente</th>
+								<th>Fecha</th>
+								<th>Total</th>
+								<th>Estado</th>
 							</tr>
-						))}
-					</tbody>
-				</table>
-			)}
+						</thead>
+						<tbody>
+							{orders.slice(0, 10).map((o) => (
+								<tr key={o.id}>
+									<td>{o.id}</td>
+									<td>{o.clientName || o.userEmail || "-"}</td>
+									<td>{formatDateTime(o.createdAt)}</td>
+									<td>{formatMoney(o.total)}</td>
+									<td>{mapStatusTag(o.status)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				)}
+			</div>
 		</>
 	);
 
@@ -245,7 +426,6 @@ const AdminPanel = () => {
 					<table className="admin-table admin-table-wide">
 						<thead>
 							<tr>
-								<th>ID</th>
 								<th>Cliente</th>
 								<th>Fecha</th>
 								<th>Total</th>
@@ -257,8 +437,14 @@ const AdminPanel = () => {
 						<tbody>
 							{orders.map((o) => (
 								<tr key={o.id}>
-									<td>{o.id}</td>
-									<td>{o.clientName || o.userEmail || "-"}</td>
+									<td>
+										<div style={{ display: "flex", flexDirection: "column" }}>
+											<span>{o.clientName || o.userEmail || "-"}</span>
+											<small style={{ color: "#92a09a" }}>
+												{formatDateTime(o.createdAt).split(" ")[0]}
+											</small>
+										</div>
+									</td>
 									<td>{formatDateTime(o.createdAt)}</td>
 									<td>{formatMoney(o.total)}</td>
 									<td>{mapStatusTag(o.status)}</td>
@@ -1028,9 +1214,7 @@ const AdminPanel = () => {
 											<span className="admin-user-name-main">
 												{u.nombre} {u.apellidoPaterno} {u.apellidoMaterno}
 											</span>
-											<span className="admin-user-name-sub">
-												ID: {u.id}
-											</span>
+											<small style={{ color: "#8fa099" }}>{u.tipoUsuario || "-"}</small>
 										</div>
 									)}
 								</td>
@@ -1125,45 +1309,95 @@ const AdminPanel = () => {
 		</>
 	);
 
+	const adminInitials = (
+		(user?.nombre || user?.displayName || user?.email || "?")
+			.split(" ")
+			.map((chunk) => chunk[0])
+			.join("")
+			.slice(0, 2)
+			.toUpperCase()
+	);
+
+	const sidebarStyles = {
+		base: {
+			background: "linear-gradient(180deg,#031c11,#063222)",
+			color: "#e8fff3",
+			padding: "32px 20px",
+			borderRadius: "28px",
+			minWidth: 240,
+			boxShadow: "0 25px 60px rgba(0,0,0,0.35)",
+		},
+		header: { marginBottom: 24 },
+		profileCard: {
+			background: "rgba(255,255,255,0.08)",
+			borderRadius: 20,
+			padding: "18px 16px",
+			marginBottom: 28,
+		},
+		avatar: {
+			width: 48,
+			height: 48,
+			borderRadius: "50%",
+			background: "rgba(255,255,255,0.15)",
+			display: "flex",
+			alignItems: "center",
+			justifyContent: "center",
+			fontWeight: 700,
+			fontSize: "1.1rem",
+			marginBottom: 10,
+		},
+		nav: { display: "flex", flexDirection: "column", gap: 10 },
+		link: {
+			padding: "10px 14px",
+			borderRadius: 999,
+			cursor: "pointer",
+			transition: "background 0.2s ease, transform 0.2s ease",
+		},
+		activeLink: {
+			background: "rgba(255,255,255,0.15)",
+			color: "#fff",
+			transform: "translateX(4px)",
+		},
+	};
+
+	// --- MAIN RENDER ---
 	return (
 		<div className="admin-layout">
-			<aside className="admin-sidebar">
-				<h4>Panel GM Express</h4>
-				<nav>
-					<a
-						className={activeSection === "dashboard" ? "active" : ""}
-						onClick={() => setActiveSection("dashboard")}
-					>
-						🏠 Dashboard
-					</a>
-					<a
-						className={activeSection === "orders" ? "active" : ""}
-						onClick={() => setActiveSection("orders")}
-					>
-						📦 Gestión de pedidos
-					</a>
-					<a
-						className={activeSection === "catalog" ? "active" : ""}
-						onClick={() => setActiveSection("catalog")}
-					>
-						🛒 Catálogo
-					</a>
-					<a
-						className={activeSection === "reports" ? "active" : ""}
-						onClick={() => setActiveSection("reports")}
-					>
-						📈 Reportes de ventas
-					</a>
-					<a
-						className={activeSection === "users" ? "active" : ""}
-						onClick={() => setActiveSection("users")}
-					>
-						👤 Mantenedor de usuarios
-					</a>
+			<aside className="admin-sidebar" style={sidebarStyles.base}>
+				<div style={sidebarStyles.header}>
+					<h4 style={{ margin: 0 }}>Panel GM Express</h4>
+					<small>Control centralizado</small>
+				</div>
+				<div style={sidebarStyles.profileCard}>
+					<div style={sidebarStyles.avatar}>{adminInitials}</div>
+					<p style={{ margin: 0, fontWeight: 600 }}>
+						{user?.nombre || user?.displayName || "Superadmin"}
+					</p>
+					<small>{user?.email}</small>
+				</div>
+				<nav style={sidebarStyles.nav}>
+					{[
+						{ key: "dashboard", label: "🏠 Dashboard" },
+						{ key: "orders", label: "📦 Gestión de pedidos" },
+						{ key: "catalog", label: "🛒 Catálogo" },
+						{ key: "reports", label: "📈 Reportes de ventas" },
+						{ key: "users", label: "👤 Mantenedor de usuarios" },
+					].map((item) => (
+						<a
+							key={item.key}
+							onClick={() => setActiveSection(item.key)}
+							style={{
+								...sidebarStyles.link,
+								...(activeSection === item.key ? sidebarStyles.activeLink : { color: "#b4d9c7" }),
+							}}
+						>
+							{item.label}
+						</a>
+					))}
 				</nav>
 			</aside>
 
-			<main className="admin-main-content">
+			<main className="admin-main-content" style={panelStyles.mainShell}>
 				{loading ? (
 					<p>Cargando datos...</p>
 				) : activeSection === "dashboard" ? (
