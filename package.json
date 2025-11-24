@@ -12,10 +12,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "sweetalert2": "^11.26.3"
-  },
-  "devDependencies": {
+    "sweetalert2": "^11.26.3",
     "@vitejs/plugin-react": "^4.3.1",
     "vite": "^5.4.10"
-  }
+  },
+  "devDependencies": {}
 }
