@@ -107,6 +107,26 @@ const Cart = () => {
 	const tax = Math.round(subtotal * TAX_RATE);
 	const total = subtotal + tax;
 
+	const processPayment = async (amount) => {
+		try {
+			setSending(true);
+			Swal.fire({
+				title: "Procesando pago",
+				text: `Cobrando $${(amount || 0).toLocaleString("es-CL")}`,
+				allowOutsideClick: false,
+				allowEscapeKey: false,
+				showConfirmButton: false,
+				didOpen: () => Swal.showLoading(),
+			});
+			await new Promise((res) => setTimeout(res, 1200)); // simulación pasarela
+			Swal.close();
+			return { ok: true, ref: `PAY-${Date.now()}` };
+		} catch (err) {
+			Swal.fire("Error", "No se pudo procesar el pago.", "error");
+			return { ok: false, ref: null };
+		}
+	};
+
 	const handleCreateOrder = async () => {
 		if (!user) return;
 		if (isCompanyUser) {
@@ -136,7 +156,12 @@ const Cart = () => {
 			const ownersInvolved = Array.from(
 				new Set(orderItems.map((i) => i.ownerId).filter(Boolean))
 			);
-			const payload = {
+			const payment = await processPayment(total);
+			if (!payment.ok) {
+				setSending(false);
+				return;
+			}
+			const orderData = {
 				userId: user.uid,
 				clientName: user.nombre
 					? `${user.nombre} ${user.apellidoPaterno || ""}`.trim()
@@ -149,16 +174,18 @@ const Cart = () => {
 				total,
 				ownersInvolved,
 				status: "pendiente",
+				estado_pedido: "pagado",
+				paymentRef: payment.ref,
 				createdAt: serverTimestamp(),
 			};
-			console.log("Cart -> creando order con payload", payload);
-			await addDoc(collection(db, "orders"), payload);
+			console.log("Cart -> creando order con payload", orderData);
+			await addDoc(collection(db, "orders"), orderData);
 
 			localStorage.removeItem(getCartKey(user.uid));
 			setItems([]);
 			await Swal.fire(
-				"Solicitud enviada",
-				"Tu solicitud de venta fue enviada correctamente.",
+				"Solicitud pagada",
+				"Tu pago fue aprobado y la solicitud fue registrada.",
 				"success"
 			);
 			navigate("/mis-pedidos");

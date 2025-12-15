@@ -238,6 +238,15 @@ const AdminPanel = () => {
 		}
 	};
 
+	const mapPaymentTag = (estado = "no_pagado") => {
+		const paid = (estado || "").toLowerCase() === "pagado";
+		return (
+			<span className={`status-tag ${paid ? "status-entregado" : "status-pendiente"}`}>
+				{paid ? "PAGADO" : "NO PAGADO"}
+			</span>
+		);
+	};
+
 	const handleChangeOrderStatus = async (orderId, newStatus) => {
 		if (!newStatus) return;
 		const order = orders.find((o) => o.id === orderId);
@@ -396,6 +405,7 @@ const AdminPanel = () => {
 								<th>Cliente</th>
 								<th>Fecha</th>
 								<th>Total</th>
+								<th>Pago</th>
 								<th>Estado</th>
 							</tr>
 						</thead>
@@ -406,6 +416,7 @@ const AdminPanel = () => {
 									<td>{o.clientName || o.userEmail || "-"}</td>
 									<td>{formatDateTime(o.createdAt)}</td>
 									<td>{formatMoney(o.total)}</td>
+									<td>{mapPaymentTag(o.estado_pedido)}</td>
 									<td>{mapStatusTag(o.status)}</td>
 								</tr>
 							))}
@@ -429,6 +440,7 @@ const AdminPanel = () => {
 								<th>Cliente</th>
 								<th>Fecha</th>
 								<th>Total</th>
+								<th>Pago</th>
 								<th>Estado</th>
 								<th>Cambiar estado</th>
 								<th>Detalle</th>
@@ -447,6 +459,7 @@ const AdminPanel = () => {
 									</td>
 									<td>{formatDateTime(o.createdAt)}</td>
 									<td>{formatMoney(o.total)}</td>
+									<td>{mapPaymentTag(o.estado_pedido)}</td>
 									<td>{mapStatusTag(o.status)}</td>
 									<td>
 										<select
@@ -525,6 +538,12 @@ const AdminPanel = () => {
 								<p>
 									<b>Estado:</b>{" "}
 									{mapStatusTag(selectedOrderInfo.status)}
+								</p>
+								<p>
+									<b>Pago:</b> {mapPaymentTag(selectedOrderInfo.estado_pedido)}
+								</p>
+								<p>
+									<b>Referencia de pago:</b> {selectedOrderInfo.paymentRef || "-"}
 								</p>
 								<hr style={{ margin: "16px 0" }} />
 								<h4>Productos solicitados</h4>
